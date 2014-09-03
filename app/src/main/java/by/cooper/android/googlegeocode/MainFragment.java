@@ -1,14 +1,19 @@
 package by.cooper.android.googlegeocode;
 
 import android.app.Fragment;
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
 import android.location.Address;
 import android.location.Geocoder;
 import android.os.Bundle;
+import android.os.Handler;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.GridView;
 
@@ -26,7 +31,6 @@ import by.cooper.android.googlegeocode.model.Location;
 public class MainFragment extends Fragment {
     private static final String LOG_TAG = MainFragment.class.getSimpleName();
 
-    private Button mSearchBtn;
     private EditText mSearchEditText;
     private GridView mLocationGridView;
     private GridLocationAdapter mGridLocationAdapter;
@@ -39,23 +43,65 @@ public class MainFragment extends Fragment {
     }
 
     @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setRetainInstance(true);
+    }
+
+    @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
+        final Handler searchHandler = new Handler();
+        final Runnable searchQuery = new Runnable() {
+            @Override
+            public void run() {
+                addAddresses();
+            }
+        };
+
         View rootView = inflater.inflate(R.layout.fragment_main, container, false);
         mSearchEditText = (EditText) rootView.findViewById(R.id.search_editText);
+        mSearchEditText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                searchHandler.removeCallbacks(searchQuery);
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                searchHandler.postDelayed(searchQuery, 2000);
+            }
+        });
+
         mLocations = new ArrayList<Location>();
 
         mGridLocationAdapter = new GridLocationAdapter(getActivity(), R.layout.gridview_item, mLocations);
         mLocationGridView = (GridView) rootView.findViewById(R.id.gridview);
         mLocationGridView.setAdapter(mGridLocationAdapter);
-
-        mSearchBtn = (Button) rootView.findViewById(R.id.button);
-        mSearchBtn.setOnClickListener(new View.OnClickListener() {
+        mLocationGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
-            public void onClick(View v) {
-                addAddresses();
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+                double lat = mLocations.get(position).getLatitude();
+                double lng = mLocations.get(position).getLongitude();
+                FragmentManager fm = getFragmentManager();
+                ShowMapFragment fragment = ShowMapFragment.newInstance(lat, lng);
+                if (fm != null) {
+                    FragmentTransaction ft = fm.beginTransaction();
+                    ft.replace(R.id.container, fragment);
+                    ft.addToBackStack(null);
+                    ft.commit();
+                }
+//                String uri = "geo:" + lat + "," + lng + "?z=12";
+//                startActivity(new Intent(android.content.Intent.ACTION_VIEW, Uri.parse(uri)));
             }
         });
+
         return rootView;
     }
 
@@ -75,10 +121,12 @@ public class MainFragment extends Fragment {
             String shortAddress = mSearchEditText.getText().toString();
             List<Address> addresses = gc.getFromLocationName(shortAddress, 10);
             for (Address address : addresses) {
-                getHelper().getLocationDataDao().createIfNotExists(getLocationFromAddress(shortAddress, address));
+                getHelper().getLocationDataDao()
+                        .createIfNotExists(getLocationFromAddress(shortAddress, address));
             }
 
-            List<Location> locations = getHelper().getLocationDataDao().queryForEq("shortAddress", shortAddress);
+            List<Location> locations = getHelper().getLocationDataDao()
+                    .queryForEq("shortAddress", shortAddress);
 
             for (Location location : locations) {
                 if (!mLocations.contains(location)) {
