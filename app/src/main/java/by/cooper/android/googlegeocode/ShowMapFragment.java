@@ -7,6 +7,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.google.android.gms.maps.CameraUpdate;
+import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.model.LatLng;
@@ -46,12 +48,21 @@ public class ShowMapFragment extends Fragment {
 
     private void setUpMap() {
         if (null == mMap) {
-            mMap = ((MapFragment) getFragmentManager().findFragmentById(R.id.map)).getMap();
+            mMap = ((MapFragment) getActivity().getFragmentManager().findFragmentById(R.id.map)).getMap();
             if (null != mMap) {
                 mMap.addMarker(new MarkerOptions().position(mCoordinates));
+                CameraUpdate center=
+                        CameraUpdateFactory.newLatLng(mCoordinates);
+                CameraUpdate zoom = CameraUpdateFactory.zoomTo(12);
+                mMap.moveCamera(center);
+                mMap.animateCamera(zoom);
             }
         }
     }
 
-
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        mMap = null;
+    }
 }

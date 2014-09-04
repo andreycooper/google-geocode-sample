@@ -3,6 +3,7 @@ package by.cooper.android.googlegeocode;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
+import android.content.Context;
 import android.location.Address;
 import android.location.Geocoder;
 import android.os.Bundle;
@@ -13,6 +14,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.GridView;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 
 import by.cooper.android.googlegeocode.helpers.DataBaseHelper;
+import by.cooper.android.googlegeocode.helpers.LocationHelper;
 import by.cooper.android.googlegeocode.model.Location;
 
 
@@ -36,7 +39,9 @@ public class MainFragment extends Fragment {
     private GridLocationAdapter mGridLocationAdapter;
     private DataBaseHelper dataBaseHelper = null;
 
-    private List<Location> mLocations;
+    private List<Location> mLocations = new ArrayList<Location>();
+    private Handler mSearchHandler;
+    private Runnable mSearchQuery;
 
 
     public MainFragment() {
@@ -45,22 +50,25 @@ public class MainFragment extends Fragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setRetainInstance(true);
+        //setRetainInstance(true);
+        mLocations = LocationHelper.get().getLocations();
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        final Handler searchHandler = new Handler();
-        final Runnable searchQuery = new Runnable() {
+        mSearchHandler = new Handler();
+        mSearchQuery = new Runnable() {
             @Override
             public void run() {
                 addAddresses();
+                hideKeyboard();
             }
         };
 
         View rootView = inflater.inflate(R.layout.fragment_main, container, false);
         mSearchEditText = (EditText) rootView.findViewById(R.id.search_editText);
+        mSearchEditText.requestFocus();
         mSearchEditText.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -69,16 +77,14 @@ public class MainFragment extends Fragment {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                searchHandler.removeCallbacks(searchQuery);
+                mSearchHandler.removeCallbacks(mSearchQuery);
             }
 
             @Override
             public void afterTextChanged(Editable s) {
-                searchHandler.postDelayed(searchQuery, 2000);
+                mSearchHandler.postDelayed(mSearchQuery, 2000);
             }
         });
-
-        mLocations = new ArrayList<Location>();
 
         mGridLocationAdapter = new GridLocationAdapter(getActivity(), R.layout.gridview_item, mLocations);
         mLocationGridView = (GridView) rootView.findViewById(R.id.gridview);
@@ -86,7 +92,7 @@ public class MainFragment extends Fragment {
         mLocationGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-
+                mSearchHandler.removeCallbacks(mSearchQuery);
                 double lat = mLocations.get(position).getLatitude();
                 double lng = mLocations.get(position).getLongitude();
                 FragmentManager fm = getFragmentManager();
@@ -97,8 +103,7 @@ public class MainFragment extends Fragment {
                     ft.addToBackStack(null);
                     ft.commit();
                 }
-//                String uri = "geo:" + lat + "," + lng + "?z=12";
-//                startActivity(new Intent(android.content.Intent.ACTION_VIEW, Uri.parse(uri)));
+
             }
         });
 
@@ -111,6 +116,9 @@ public class MainFragment extends Fragment {
         if (dataBaseHelper != null) {
             OpenHelperManager.releaseHelper();
             dataBaseHelper = null;
+        }
+        if (mSearchHandler != null) {
+            mSearchHandler.removeCallbacks(mSearchQuery);
         }
     }
 
@@ -128,12 +136,7 @@ public class MainFragment extends Fragment {
             List<Location> locations = getHelper().getLocationDataDao()
                     .queryForEq("shortAddress", shortAddress);
 
-            for (Location location : locations) {
-                if (!mLocations.contains(location)) {
-                    mLocations.add(location);
-                }
-            }
-            mGridLocationAdapter.notifyDataSetChanged();
+            populateGridView(locations);
 
         } catch (IOException e) {
             Log.e(LOG_TAG, "error getting the location from GeoCoder", e);
@@ -141,6 +144,16 @@ public class MainFragment extends Fragment {
             Log.e(LOG_TAG, "error with LocationDataDao", e);
         }
 
+    }
+
+    private void populateGridView(List<Location> locations) {
+        for (Location location : locations) {
+            if (!mLocations.contains(location)) {
+                mLocations.add(location);
+                LocationHelper.get().addLocation(location);
+            }
+        }
+        mGridLocationAdapter.notifyDataSetChanged();
     }
 
     private Location getLocationFromAddress(String shortAddress, Address address) {
@@ -169,6 +182,14 @@ public class MainFragment extends Fragment {
             dataBaseHelper = OpenHelperManager.getHelper(getActivity(), DataBaseHelper.class);
         }
         return dataBaseHelper;
+    }
+
+    private void hideKeyboard() {
+        InputMethodManager inputMethodManager = (InputMethodManager) getActivity().getSystemService(
+                Context.INPUT_METHOD_SERVICE);
+        inputMethodManager.hideSoftInputFromWindow(mSearchEditText.getWindowToken(), 0);
+        mSearchEditText.setText("");
+        mSearchHandler.removeCallbacks(mSearchQuery);
     }
 
 }

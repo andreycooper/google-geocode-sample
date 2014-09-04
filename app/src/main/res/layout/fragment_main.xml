@@ -26,5 +26,6 @@
         android:horizontalSpacing="10dp"
         android:stretchMode="columnWidth"
         android:numColumns="2"
+        android:paddingTop="8dp"
         android:layout_below="@+id/search_editText" />
 </RelativeLayout>
