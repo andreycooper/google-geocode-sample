@@ -134,7 +134,7 @@ public class MainFragment extends Fragment {
             List<Location> locations = getHelper().getLocationDataDao()
                     .queryForEq(Location.SHORT_ADDRESS, shortAddress);
 
-            if (null == locations || locations.isEmpty()) {
+            if (locations.isEmpty()) {
                 List<Address> addresses = gc.getFromLocationName(shortAddress, ADDRESS_COUNT);
                 for (Address address : addresses) {
                     Location location = getLocationFromAddress(shortAddress, address);
