@@ -9,13 +9,14 @@ import com.j256.ormlite.table.DatabaseTable;
  */
 @DatabaseTable(tableName = "locations")
 public class Location {
+    public static final String SHORT_ADDRESS = "shortAddress";
 
     @DatabaseField(dataType = DataType.DOUBLE, defaultValue = "0.0")
     private double latitude;
     @DatabaseField(dataType = DataType.DOUBLE, defaultValue = "0.0")
     private double longitude;
 
-    @DatabaseField(dataType = DataType.STRING, canBeNull = false, defaultValue = "")
+    @DatabaseField(dataType = DataType.STRING, columnName = SHORT_ADDRESS, canBeNull = false, defaultValue = "")
     private String shortAddress;
 
     @DatabaseField(id = true, dataType = DataType.STRING, canBeNull = false, defaultValue = "")

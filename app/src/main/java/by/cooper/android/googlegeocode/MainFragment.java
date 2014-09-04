@@ -1,13 +1,14 @@
 package by.cooper.android.googlegeocode;
 
-import android.app.Fragment;
-import android.app.FragmentManager;
-import android.app.FragmentTransaction;
+
 import android.content.Context;
 import android.location.Address;
 import android.location.Geocoder;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
@@ -33,9 +34,12 @@ import by.cooper.android.googlegeocode.model.Location;
 
 public class MainFragment extends Fragment {
     private static final String LOG_TAG = MainFragment.class.getSimpleName();
+    private static final String SPACE = " ";
+    private static final long TWO_SECONDS = 2000;
+    private static final String EMPTY = "";
+    private static final int ADDRESS_COUNT = 10;
 
     private EditText mSearchEditText;
-    private GridView mLocationGridView;
     private GridLocationAdapter mGridLocationAdapter;
     private DataBaseHelper dataBaseHelper = null;
 
@@ -68,7 +72,6 @@ public class MainFragment extends Fragment {
 
         View rootView = inflater.inflate(R.layout.fragment_main, container, false);
         mSearchEditText = (EditText) rootView.findViewById(R.id.search_editText);
-        mSearchEditText.requestFocus();
         mSearchEditText.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -82,17 +85,18 @@ public class MainFragment extends Fragment {
 
             @Override
             public void afterTextChanged(Editable s) {
-                mSearchHandler.postDelayed(mSearchQuery, 2000);
+                mSearchHandler.postDelayed(mSearchQuery, TWO_SECONDS);
             }
         });
 
         mGridLocationAdapter = new GridLocationAdapter(getActivity(), R.layout.gridview_item, mLocations);
-        mLocationGridView = (GridView) rootView.findViewById(R.id.gridview);
-        mLocationGridView.setAdapter(mGridLocationAdapter);
-        mLocationGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+        GridView locationGridView = (GridView) rootView.findViewById(R.id.gridview);
+        locationGridView.setAdapter(mGridLocationAdapter);
+        locationGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 mSearchHandler.removeCallbacks(mSearchQuery);
+                hideKeyboard();
                 double lat = mLocations.get(position).getLatitude();
                 double lng = mLocations.get(position).getLongitude();
                 FragmentManager fm = getFragmentManager();
@@ -124,17 +128,21 @@ public class MainFragment extends Fragment {
 
     private void addAddresses() {
         Geocoder gc = new Geocoder(getActivity(), Locale.US);
+        String shortAddress = mSearchEditText.getText().toString().trim().toLowerCase();
 
         try {
-            String shortAddress = mSearchEditText.getText().toString();
-            List<Address> addresses = gc.getFromLocationName(shortAddress, 10);
-            for (Address address : addresses) {
-                getHelper().getLocationDataDao()
-                        .createIfNotExists(getLocationFromAddress(shortAddress, address));
-            }
-
             List<Location> locations = getHelper().getLocationDataDao()
-                    .queryForEq("shortAddress", shortAddress);
+                    .queryForEq(Location.SHORT_ADDRESS, shortAddress);
+
+            if (null == locations || locations.isEmpty()) {
+                List<Address> addresses = gc.getFromLocationName(shortAddress, ADDRESS_COUNT);
+                for (Address address : addresses) {
+                    Location location = getLocationFromAddress(shortAddress, address);
+                    getHelper().getLocationDataDao()
+                            .createIfNotExists(location);
+                    locations.add(location);
+                }
+            }
 
             populateGridView(locations);
 
@@ -172,7 +180,7 @@ public class MainFragment extends Fragment {
         StringBuilder addressLine = new StringBuilder();
         for (int i = 0; i <= address.getMaxAddressLineIndex(); i++) {
             addressLine.append(address.getAddressLine(i));
-            addressLine.append(" ");
+            addressLine.append(SPACE);
         }
         return addressLine.toString().trim();
     }
@@ -188,7 +196,7 @@ public class MainFragment extends Fragment {
         InputMethodManager inputMethodManager = (InputMethodManager) getActivity().getSystemService(
                 Context.INPUT_METHOD_SERVICE);
         inputMethodManager.hideSoftInputFromWindow(mSearchEditText.getWindowToken(), 0);
-        mSearchEditText.setText("");
+        mSearchEditText.setText(EMPTY);
         mSearchHandler.removeCallbacks(mSearchQuery);
     }
 

@@ -50,11 +50,9 @@ public class GridLocationAdapter extends ArrayAdapter<Location> {
         Location location = mLocations.get(position);
         String url = BEGIN_URL
                 + location.getCoordinatesForURL()
-                + MIDDLE_URL
-                + location.getCoordinatesForURL()
                 + END_URL;
         holder.imageTitle.setText(location.getFullAddress());
-        Picasso.with(mContext).setIndicatorsEnabled(true);
+        // I use Picasso library for downloading images because it provides disk cache and memory cache
         Picasso.with(mContext).load(url).into(holder.image);
 
         return view;
