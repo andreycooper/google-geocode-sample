@@ -2,16 +2,14 @@ package by.cooper.android.googlegeocode;
 
 
 import android.content.Context;
-import android.location.Address;
-import android.location.Geocoder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
+import android.support.v4.content.Loader;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,22 +20,16 @@ import android.widget.GridView;
 
 import com.j256.ormlite.android.apptools.OpenHelperManager;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import by.cooper.android.googlegeocode.helpers.DataBaseHelper;
-import by.cooper.android.googlegeocode.helpers.LocationHelper;
 import by.cooper.android.googlegeocode.model.Location;
 
 
-public class MainFragment extends Fragment {
-    private static final String LOG_TAG = MainFragment.class.getSimpleName();
-    private static final String SPACE = " ";
-    private static final long TWO_SECONDS = 2000;
-    private static final String EMPTY = "";
-    private static final int ADDRESS_COUNT = 10;
+public class MainFragment extends Fragment implements android.support.v4.app.LoaderManager.LoaderCallbacks<List<Location>> {
+    private static final long SEARCH_DELAY = 500;
+    private static final int LOADER_ID = 1;
 
     private EditText mSearchEditText;
     private GridLocationAdapter mGridLocationAdapter;
@@ -47,15 +39,13 @@ public class MainFragment extends Fragment {
     private Handler mSearchHandler;
     private Runnable mSearchQuery;
 
-
     public MainFragment() {
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        //setRetainInstance(true);
-        mLocations = LocationHelper.get().getLocations();
+        setRetainInstance(true);
     }
 
     @Override
@@ -65,7 +55,7 @@ public class MainFragment extends Fragment {
         mSearchQuery = new Runnable() {
             @Override
             public void run() {
-                addAddresses();
+                useLoader();
                 hideKeyboard();
             }
         };
@@ -75,7 +65,7 @@ public class MainFragment extends Fragment {
         mSearchEditText.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-
+                mSearchHandler.removeCallbacks(mSearchQuery);
             }
 
             @Override
@@ -85,7 +75,10 @@ public class MainFragment extends Fragment {
 
             @Override
             public void afterTextChanged(Editable s) {
-                mSearchHandler.postDelayed(mSearchQuery, TWO_SECONDS);
+                boolean isEditEmpty = mSearchEditText.getText().toString().trim().length() == 0;
+                if (!isEditEmpty) {
+                    mSearchHandler.postDelayed(mSearchQuery, SEARCH_DELAY);
+                }
             }
         });
 
@@ -126,78 +119,51 @@ public class MainFragment extends Fragment {
         }
     }
 
-    private void addAddresses() {
-        Geocoder gc = new Geocoder(getActivity(), Locale.US);
-        String shortAddress = mSearchEditText.getText().toString().trim().toLowerCase();
-
-        try {
-            List<Location> locations = getHelper().getLocationDataDao()
-                    .queryForEq(Location.SHORT_ADDRESS, shortAddress);
-
-            if (locations.isEmpty()) {
-                List<Address> addresses = gc.getFromLocationName(shortAddress, ADDRESS_COUNT);
-                for (Address address : addresses) {
-                    Location location = getLocationFromAddress(shortAddress, address);
-                    getHelper().getLocationDataDao()
-                            .createIfNotExists(location);
-                    locations.add(location);
-                }
-            }
-
-            populateGridView(locations);
-
-        } catch (IOException e) {
-            Log.e(LOG_TAG, "error getting the location from GeoCoder", e);
-        } catch (RuntimeException e) {
-            Log.e(LOG_TAG, "error with LocationDataDao", e);
-        }
-
-    }
-
     private void populateGridView(List<Location> locations) {
+        mLocations.clear();
         for (Location location : locations) {
             if (!mLocations.contains(location)) {
                 mLocations.add(location);
-                LocationHelper.get().addLocation(location);
             }
         }
         mGridLocationAdapter.notifyDataSetChanged();
-    }
-
-    private Location getLocationFromAddress(String shortAddress, Address address) {
-        Location location = new Location();
-        if (address.hasLatitude() & address.hasLongitude()) {
-            location.setLatitude(address.getLatitude());
-            location.setLongitude(address.getLongitude());
-        }
-        location.setShortAddress(shortAddress);
-        location.setFullAddress(getAddressLine(address));
-        return location;
-    }
-
-
-    private String getAddressLine(Address address) {
-        StringBuilder addressLine = new StringBuilder();
-        for (int i = 0; i <= address.getMaxAddressLineIndex(); i++) {
-            addressLine.append(address.getAddressLine(i));
-            addressLine.append(SPACE);
-        }
-        return addressLine.toString().trim();
-    }
-
-    private DataBaseHelper getHelper() {
-        if (dataBaseHelper == null) {
-            dataBaseHelper = OpenHelperManager.getHelper(getActivity(), DataBaseHelper.class);
-        }
-        return dataBaseHelper;
     }
 
     private void hideKeyboard() {
         InputMethodManager inputMethodManager = (InputMethodManager) getActivity().getSystemService(
                 Context.INPUT_METHOD_SERVICE);
         inputMethodManager.hideSoftInputFromWindow(mSearchEditText.getWindowToken(), 0);
-        mSearchEditText.setText(EMPTY);
-        mSearchHandler.removeCallbacks(mSearchQuery);
     }
 
+    private void useLoader() {
+        Bundle args = new Bundle();
+        String shortAddress = mSearchEditText.getText().toString().trim().toLowerCase();
+        args.putSerializable(SearchLocationsLoader.ADDRESS_TAG, shortAddress);
+        Loader<List<Location>> loader = getActivity().getSupportLoaderManager().getLoader(LOADER_ID);
+        if (null == loader) {
+            loader = getActivity().getSupportLoaderManager().initLoader(LOADER_ID, args, this);
+        } else {
+            loader = getActivity().getSupportLoaderManager().restartLoader(LOADER_ID, args, this);
+        }
+        loader.forceLoad();
+    }
+
+    @Override
+    public Loader<List<Location>> onCreateLoader(int i, Bundle bundle) {
+        Loader<List<Location>> loader = null;
+        if (i == LOADER_ID) {
+            loader = new SearchLocationsLoader(getActivity(), bundle);
+        }
+        return loader;
+    }
+
+    @Override
+    public void onLoadFinished(Loader<List<Location>> listLoader, List<Location> locations) {
+        populateGridView(locations);
+    }
+
+    @Override
+    public void onLoaderReset(Loader<List<Location>> listLoader) {
+
+    }
 }

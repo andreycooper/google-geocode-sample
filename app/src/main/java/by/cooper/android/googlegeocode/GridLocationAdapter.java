@@ -18,7 +18,6 @@ import by.cooper.android.googlegeocode.model.Location;
 
 public class GridLocationAdapter extends ArrayAdapter<Location> {
     private static final String BEGIN_URL = "https://maps.googleapis.com/maps/api/staticmap?center=";
-    private static final String MIDDLE_URL = "&markers=";
     private static final String END_URL = "&zoom=12&size=400x400&sensor=false";
 
     private Context mContext;
