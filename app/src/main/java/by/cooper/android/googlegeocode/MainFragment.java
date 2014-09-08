@@ -10,13 +10,16 @@ import android.support.v4.app.FragmentTransaction;
 import android.support.v4.content.Loader;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.GridView;
+import android.widget.TextView;
 
 import com.j256.ormlite.android.apptools.OpenHelperManager;
 
@@ -56,7 +59,6 @@ public class MainFragment extends Fragment implements android.support.v4.app.Loa
             @Override
             public void run() {
                 useLoader();
-                hideKeyboard();
             }
         };
 
@@ -75,10 +77,23 @@ public class MainFragment extends Fragment implements android.support.v4.app.Loa
 
             @Override
             public void afterTextChanged(Editable s) {
-                boolean isEditEmpty = mSearchEditText.getText().toString().trim().length() == 0;
-                if (!isEditEmpty) {
+                if (!isSearchEditEmpty()) {
                     mSearchHandler.postDelayed(mSearchQuery, SEARCH_DELAY);
                 }
+            }
+        });
+        mSearchEditText.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            @Override
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                    mSearchHandler.removeCallbacks(mSearchQuery);
+                    hideKeyboard();
+                    if (!isSearchEditEmpty()) {
+                        useLoader();
+                    }
+                    return true;
+                }
+                return false;
             }
         });
 
@@ -119,6 +134,10 @@ public class MainFragment extends Fragment implements android.support.v4.app.Loa
         }
     }
 
+    private boolean isSearchEditEmpty() {
+        return mSearchEditText.getText().toString().trim().length() == 0;
+    }
+
     private void populateGridView(List<Location> locations) {
         mLocations.clear();
         for (Location location : locations) {
@@ -132,7 +151,8 @@ public class MainFragment extends Fragment implements android.support.v4.app.Loa
     private void hideKeyboard() {
         InputMethodManager inputMethodManager = (InputMethodManager) getActivity().getSystemService(
                 Context.INPUT_METHOD_SERVICE);
-        inputMethodManager.hideSoftInputFromWindow(mSearchEditText.getWindowToken(), 0);
+        inputMethodManager.hideSoftInputFromWindow(mSearchEditText.getWindowToken(),
+                InputMethodManager.RESULT_UNCHANGED_SHOWN);
     }
 
     private void useLoader() {
